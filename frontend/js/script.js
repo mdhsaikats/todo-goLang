@@ -1,186 +1,183 @@
-// Notification function
+// ===== Notification System =====
 function showNotification(message, type = 'success') {
     const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
+    notification.className = `fixed top-6 right-6 px-4 py-2 rounded-lg shadow-lg text-white text-sm font-medium transition-transform duration-300 translate-x-full opacity-0 ${
+        type === 'success' ? 'bg-green-600' : 'bg-red-600'
+    }`;
+
     notification.textContent = message;
-    
     document.body.appendChild(notification);
-    
-    // Trigger animation
+
+    // Animate in
     setTimeout(() => {
-        notification.classList.add('show');
-    }, 10);
-    
-    // Remove after 3 seconds
+        notification.classList.remove('translate-x-full', 'opacity-0');
+    }, 50);
+
+    // Animate out
     setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => {
-            notification.remove();
-        }, 300);
+        notification.classList.add('translate-x-full', 'opacity-0');
+        setTimeout(() => notification.remove(), 300);
     }, 3000);
 }
 
-async function addTask() {
-    const taskInput = document.getElementById('taskInput');
-    const taskList = document.getElementById('taskList');
-    const taskText = taskInput.value.trim();
-
-    if (taskText !== '') {
-        try {
-            // Send POST request to backend
-            const response = await fetch('http://localhost:8080/api/tasks', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ task: taskText, completed: false })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to add task');
-            }
-
-            const data = await response.json();
-            
-            // Create and add task to pending list
-            const listItem = createTaskElement(data);
-            document.getElementById('taskList').appendChild(listItem);
-            
-            taskInput.value = '';
-            taskInput.focus();
-            
-            showNotification('Task added successfully!', 'success');
-        } catch (error) {
-            console.error('Error adding task:', error);
-            showNotification('Failed to add task. Please try again.', 'error');
-        }
-    }
-}
-
+// ===== Fetch Tasks =====
 async function fetchTasks() {
     const taskList = document.getElementById('taskList');
     const completedTaskList = document.getElementById('completedTaskList');
-    
+
     try {
         const response = await fetch('http://localhost:8080/api/tasks');
-        if (!response.ok) {
-            throw new Error('Failed to fetch tasks');
-        }
+        if (!response.ok) throw new Error('Failed to fetch tasks');
 
         const tasks = await response.json();
-        
-        // Clear existing tasks
         taskList.innerHTML = '';
         completedTaskList.innerHTML = '';
-        
-        // Add each task to the appropriate list
+
         tasks.forEach(task => {
-            const listItem = createTaskElement(task);
-            
-            if (task.completed) {
-                completedTaskList.appendChild(listItem);
-            } else {
-                taskList.appendChild(listItem);
-            }
+            const item = createTaskElement(task);
+            (task.completed ? completedTaskList : taskList).appendChild(item);
         });
+
+        updateCounters(tasks);
     } catch (error) {
         console.error('Error fetching tasks:', error);
-        showNotification('Failed to load tasks. Please refresh the page.', 'error');
+        showNotification('❌ Failed to load tasks. Please refresh.', 'error');
     }
 }
 
+// ===== Create Task Element =====
 function createTaskElement(task) {
-    const listItem = document.createElement('li');
-    listItem.dataset.id = task.id;
+    const li = document.createElement('li');
+    li.dataset.id = task.id;
+    li.className =
+        'flex justify-between items-center bg-gray-100 rounded-lg p-2 mb-2 border transition-all hover:shadow-md';
 
-    const taskSpan = document.createElement('span');
-    taskSpan.textContent = task.task;
+    const span = document.createElement('span');
+    span.textContent = task.task;
+    span.className = `cursor-pointer ${task.completed ? 'line-through text-gray-500' : 'text-black'}`;
+    span.onclick = () => toggleTaskCompletion(task.id, li, task.completed);
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.textContent = '✕';
-    deleteBtn.className = 'delete-btn';
-    deleteBtn.onclick = function(e) {
-        e.stopPropagation();
-        deleteTask(task.id, listItem);
-    };
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'flex gap-2';
 
-    taskSpan.onclick = function() {
-        toggleTaskCompletion(task.id, listItem, task.completed);
-    };
-
-    listItem.appendChild(taskSpan);
-    listItem.appendChild(deleteBtn);
+    const delBtn = document.createElement('button');
+    delBtn.className = 'hover:scale-110 transition-transform p-1';
+    delBtn.title = 'Delete';
     
-    return listItem;
+    // Create and add image instead of text
+    const deleteIcon = document.createElement('img');
+    deleteIcon.src = 'asset/delete.png'; // Update with your image path
+    deleteIcon.alt = 'Delete';
+    deleteIcon.className = 'w-5 h-5'; // Adjust size as needed
+    
+    delBtn.appendChild(deleteIcon);
+    delBtn.onclick = e => {
+        e.stopPropagation();
+        deleteTask(task.id, li);
+    };
+
+    btnContainer.appendChild(delBtn);
+
+    li.appendChild(span);
+    li.appendChild(btnContainer);
+
+    return li;
 }
 
-async function deleteTask(taskId, listItem) {
+// ===== Add Task =====
+async function addTask() {
+    const input = document.getElementById('taskInput');
+    const text = input.value.trim();
+
+    if (text === '') {
+        showNotification('⚠️ Please enter a task!', 'error');
+        input.focus();
+        return;
+    }
+
     try {
-        const response = await fetch(`http://localhost:8080/api/tasks/${taskId}`, {
-            method: 'DELETE'
+        const res = await fetch('http://localhost:8080/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task: text, completed: false }),
         });
 
-        if (response.ok) {
-            listItem.remove();
-            showNotification('Task deleted successfully!', 'success');
-        } else {
-            throw new Error('Failed to delete task');
-        }
-    } catch (error) {
-        console.error('Error deleting task:', error);
-        showNotification('Failed to delete task. Please try again.', 'error');
+        if (!res.ok) throw new Error('Failed to add task');
+
+        const data = await res.json();
+        const item = createTaskElement(data);
+        document.getElementById('taskList').appendChild(item);
+
+        input.value = '';
+        input.focus();
+        showNotification('✅ Task added successfully!');
+        fetchTasks(); // refresh counts
+    } catch (err) {
+        console.error('Error adding task:', err);
+        showNotification('❌ Failed to add task. Try again.', 'error');
     }
 }
 
-async function toggleTaskCompletion(taskId, listItem, currentStatus) {
+// ===== Delete Task =====
+async function deleteTask(id, li) {
+    try {
+        const res = await fetch(`http://localhost:8080/api/tasks/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+
+        li.classList.add('opacity-0', 'translate-x-10');
+        setTimeout(() => li.remove(), 300);
+        showNotification('🗑️ Task deleted!');
+        fetchTasks();
+    } catch (err) {
+        console.error('Error deleting task:', err);
+        showNotification('❌ Could not delete task.', 'error');
+    }
+}
+
+// ===== Toggle Completion =====
+async function toggleTaskCompletion(id, li, currentStatus) {
     try {
         const newStatus = !currentStatus;
-        
-        const response = await fetch(`http://localhost:8080/api/tasks/${taskId}`, {
+        const res = await fetch(`http://localhost:8080/api/tasks/${id}`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ completed: newStatus })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ completed: newStatus }),
         });
 
-        if (!response.ok) {
-            throw new Error('Failed to update task');
-        }
+        if (!res.ok) throw new Error('Update failed');
 
-        // Move task to appropriate list
-        const taskList = document.getElementById('taskList');
-        const completedTaskList = document.getElementById('completedTaskList');
-        
-        listItem.remove();
-        
-        if (newStatus) {
-            completedTaskList.appendChild(listItem);
-            showNotification('Task marked as completed!', 'success');
-        } else {
-            taskList.appendChild(listItem);
-            showNotification('Task moved to pending!', 'success');
-        }
-        
-        // Update the onclick handler with new status
-        const taskSpan = listItem.querySelector('span');
-        taskSpan.onclick = function() {
-            toggleTaskCompletion(taskId, listItem, newStatus);
-        };
-        
-    } catch (error) {
-        console.error('Error updating task:', error);
-        showNotification('Failed to update task. Please try again.', 'error');
+        // Animate movement
+        li.classList.add('opacity-0', 'translate-x-5');
+        setTimeout(() => {
+            li.remove();
+            const newList = newStatus
+                ? document.getElementById('completedTaskList')
+                : document.getElementById('taskList');
+            newList.appendChild(createTaskElement({ id, task: li.textContent.trim(), completed: newStatus }));
+        }, 200);
+
+        showNotification(newStatus ? '✅ Task completed!' : '↩️ Task moved back!');
+        fetchTasks();
+    } catch (err) {
+        console.error('Error updating task:', err);
+        showNotification('❌ Failed to update task.', 'error');
     }
 }
 
+// ===== Counter Update =====
+function updateCounters(tasks) {
+    const all = tasks.length;
+    const completed = tasks.filter(t => t.completed).length;
+    const pending = all - completed;
+
+    document.getElementById('allCount').textContent = all;
+    document.getElementById('completedCount').textContent = completed;
+    document.getElementById('pendingCount').textContent = pending;
+}
+
+// ===== Event Listeners =====
 document.getElementById('addTaskButton').addEventListener('click', addTask);
-
-document.getElementById('taskInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        addTask();
-    }
+document.getElementById('taskInput').addEventListener('keypress', e => {
+    if (e.key === 'Enter') addTask();
 });
-
-// Load tasks when page loads
 window.addEventListener('DOMContentLoaded', fetchTasks);

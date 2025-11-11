@@ -1,0 +1,31 @@
+# Environment variables (contains passwords)
+.env
+
+# MySQL data folder
+mysql-data/
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+backend/backend
+backend/main
+
+# Go test binary
+*.test
+
+# Go coverage
+*.out
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
